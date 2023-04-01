@@ -20,43 +20,56 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=config.TOKEN, parse_mode=types.ParseMode.HTML)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-admins = [450284324] 
+admins = [] 
+#450284324
 #895230164
+
+
 # реализация команды '/start'
 @dp.message_handler(commands=['start'])
 async def start(message):
     if message.from_user.id in admins:
-        await message.delete()
+        #await message.delete()
+        #тут нет markup
         await bot.send_message(message.chat.id, text="Привет admin", reply_markup=markup)
     else:
         await user_func(message)
-async def user_func(message):
-    await message.delete()
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    await bot.send_message(message.chat.id, text="Привет! У нас ты можешь дистанционно заказать кофе!", reply_markup=markup)
-    btn1 = types.KeyboardButton("Гороховая 35-37")
-    btn2 = types.KeyboardButton("Садовая 38")
-    btn3 = types.KeyboardButton("Садовая 44")
-    btn4 = types.KeyboardButton("Попова 30")
-    btn5 = types.KeyboardButton("Ломоносова 20")
-    markup.add(btn1, btn2, btn3, btn4, btn5)
-    await bot.send_message(message.chat.id, text="Выбери кофейню", reply_markup=markup)
-@dp.message_handler(content_types=['text'])
-def cafe(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    if message.text == "Гороховая 35-37":
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
-        btn = []
-        for i in record:
-            btn.append(types.KeyboardButton(i[0]))
-        for i in btn:
-            markup.add(i)
 
+
+
+async def user_func(message):
+    #await message.delete()
+    btn = [[KeyboardButton("Гороховая 35-37")], [KeyboardButton("Садовая 38")], [KeyboardButton("Садовая 44")], [KeyboardButton("Попова 30")], [KeyboardButton("Ломоносова 20")] ]
+    await bot.send_message(message.chat.id, text="Привет! У нас ты можешь дистанционно заказать кофе!")
+    await bot.send_message(message.chat.id, text="Выберите кофейню", reply_markup=ReplyKeyboardMarkup(btn))
+
+
+@dp.message_handler(content_types=['text'])
+async def cafe(message):
+    #await message.delete()
+    cursor.execute("""SELECT * FROM "menu"; """)
+    record = cursor.fetchall()
+    btn = []
+    for i in record:
+        btn.append([KeyboardButton("{}  - {}р./{}р./{}р.".format(i[0], i[1], i[2], i[3]))])
+    await bot.send_message(message.chat.id, text="Выберите кофе", reply_markup=ReplyKeyboardMarkup(btn))
+
+@dp.message_handler(content_types=['text'])
+async def coffee(message):
+    #await message.delete()
+    print('1')
+    cursor.execute("""SELECT 'smallPrice' FROM "menu" WHERE 'coffeeName'='Капучино';""")
+    record = cursor.fetchall()
+    print(record)
+    btn = [[KeyboardButton("0.3 - {}р.".format(1))], [KeyboardButton("0.4 - {}.p".format(1))], [KeyboardButton("0.5 - {}.p".format(1))]]
+    for i in record:
+        btn.append([KeyboardButton(i[0])])
+    await bot.send_message(message.chat.id, text="Выберите кофе".format(message.text), reply_markup=ReplyKeyboardMarkup(btn, resize_keyboard=True))
+    
 
 # запуск бота
-global cursor, connection
-        
+global cursor, connection, msgs
+
 if __name__ == '__main__':
     try:
         connection = psycopg2.connect(user="postgres",
@@ -66,6 +79,7 @@ if __name__ == '__main__':
                                       database="lowcoffee_bot")
         connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = connection.cursor()
+        msgs = []
         executor.start_polling(dp, skip_updates=False)
     except (Exception, Error) as error:
         print("Ошибка на сервере, попробуйте заказать позже", error)
