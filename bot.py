@@ -54,7 +54,7 @@ async def main(message):
         btn = [types.KeyboardButton("Капучино 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Капучино 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Капучино 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
     elif (message.text == "Латте - 120р./150р./170р."):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
@@ -66,7 +66,7 @@ async def main(message):
         btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
     elif (message.text == "Мокко - 145р./175р./195р."):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
@@ -78,7 +78,7 @@ async def main(message):
         btn = [types.KeyboardButton("Мокко 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Мокко 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Мокко 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
     elif (message.text == "Флэт Уайт - 140р./170р./190р."):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
@@ -90,7 +90,7 @@ async def main(message):
         btn = [types.KeyboardButton("Флэт Уайт 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Флэт Уайт 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Флэт Уайт 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
     elif (message.text == "Капучино 0.3 - 120р.") or (message.text == "Капучино 0.4 - 150p.") or (message.text == "Капучино 0.5 - 170p.") or (message.text == "Латте 0.3 - 120р.") or (message.text == "Латте 0.4 - 150p.") or (message.text == "Латте 0.5 - 170p.") or (message.text == "Мокко 0.3 - 145р.") or (message.text == "Мокко 0.4 - 175p.") or (message.text == "Мокко 0.5 - 195p.") or (message.text == "Флэт Уайт 0.3 - 140р.") or (message.text == "Флэт Уайт 0.4 - 170p.") or (message.text == "Флэт Уайт 0.5 - 190p.") :
         price = message.text[::-1]
         price = price[2:5]
