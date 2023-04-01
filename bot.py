@@ -39,36 +39,76 @@ async def start(message):
 
 async def user_func(message):
     #await message.delete()
-    btn = [[KeyboardButton("Гороховая 35-37")], [KeyboardButton("Садовая 38")], [KeyboardButton("Садовая 44")], [KeyboardButton("Попова 30")], [KeyboardButton("Ломоносова 20")] ]
+    btn = [types.KeyboardButton("Гороховая 35-37"), types.KeyboardButton("Садовая 38"), types.KeyboardButton("Садовая 44"), types.KeyboardButton("Попова 30"), types.KeyboardButton("Ломоносова 20") ]
     await bot.send_message(message.chat.id, text="Привет! У нас ты можешь дистанционно заказать кофе!")
-    await bot.send_message(message.chat.id, text="Выберите кофейню", reply_markup=ReplyKeyboardMarkup(btn))
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    for i in btn:
+        markup.add(i)
+    await bot.send_message(message.chat.id, text="Выберите кофейню", reply_markup=markup)
 
 
 @dp.message_handler(content_types=['text'])
-async def cafe(message):
-    #await message.delete()
-    cursor.execute("""SELECT * FROM "menu"; """)
-    record = cursor.fetchall()
-    btn = []
-    for i in record:
-        btn.append([KeyboardButton("{}  - {}р./{}р./{}р.".format(i[0], i[1], i[2], i[3]))])
-    await bot.send_message(message.chat.id, text="Выберите кофе", reply_markup=ReplyKeyboardMarkup(btn))
-
-@dp.message_handler(content_types=['text'])
-async def coffee(message):
-    #await message.delete()
-    print('1')
-    cursor.execute("""SELECT 'smallPrice' FROM "menu" WHERE 'coffeeName'='Капучино';""")
-    record = cursor.fetchall()
-    print(record)
-    btn = [[KeyboardButton("0.3 - {}р.".format(1))], [KeyboardButton("0.4 - {}.p".format(1))], [KeyboardButton("0.5 - {}.p".format(1))]]
-    for i in record:
-        btn.append([KeyboardButton(i[0])])
-    await bot.send_message(message.chat.id, text="Выберите кофе".format(message.text), reply_markup=ReplyKeyboardMarkup(btn, resize_keyboard=True))
+async def main(message):
+    if (message.text == "Гороховая 35-37") or (message.text == "Садовая 38") or (message.text == "Садовая 44") or (message.text == "Попова 30") or (message.text == "Ломоносова 20"): 
+        #await message.delete()
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        btn = []
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        for i in record:
+            btn.append(types.KeyboardButton("{} - {}р./{}р./{}р.".format(i[0], i[1], i[2], i[3])))
+        for i in btn:
+            markup.add(i)
+        await bot.send_message(message.chat.id, text="Выберите кофе", reply_markup=markup)
+    elif (message.text == "Капучино - 120р./150р./170р."):
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        #await message.delete()
+        tmp = 0
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        btn = [types.KeyboardButton("Капучино 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Капучино 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Капучино 0.5 - {}.p".format(record[tmp][3]))]
+        for i in btn:
+            markup.add(i)
+        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+    elif (message.text == "Латте - 120р./150р./170р."):
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        #await message.delete()
+        tmp = 1
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}.p".format(record[tmp][3]))]
+        for i in btn:
+            markup.add(i)
+        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+    elif (message.text == "Мокко - 145р./175р./195р."):
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        #await message.delete()
+        tmp = 2
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}.p".format(record[tmp][3]))]
+        for i in btn:
+            markup.add(i)
+        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+    elif (message.text == "Флэт Уайт - 140р./170р./190р."):
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        #await message.delete()
+        tmp = 3
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        btn = [types.KeyboardButton("Флэт Уайт 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Флэт Уайт 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Флэт Уайт 0.5 - {}.p".format(record[tmp][3]))]
+        for i in btn:
+            markup.add(i)
+        await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
+    elif (message.text == "Капучино 0.3 - 120р."):
+        
+    else:
+        await bot.send_message(message.chat.id, text="Такой команды ещё нет")
     
 
 # запуск бота
-global cursor, connection, msgs
+global cursor, connection, order
+order = []
 
 if __name__ == '__main__':
     try:
