@@ -1,78 +1,72 @@
-import config 
+import config
 import logging
-import aiogram
+from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentType
-from aiogram.types import ReplyKeyboardRemove, \
-    ReplyKeyboardMarkup, KeyboardButton, \
-    InlineKeyboardMarkup, InlineKeyboardButton
-
-logging.basicConfig(level=logging.INFO)                             
-order1 =''
-order2 =''
-order3 = ''
-bot = Bot(token=config.TOKEN)
-dp= Dispatcher(bot)
-@bot.message_handler(commands=['start'])
-def start(message):
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton('Гороховая 35-37')
-        btn2 = types.KeyboardButton("Садовая 38")
-        btn3 = types.KeyboardButton("Садовая 44")
-        btn4 = types.KeyboardButton("Попова 30")
-        btn5 = types.KeyboardButton("Ломоносова 20")
-        markup.add(btn1, btn2, btn3, btn4, btn5)
-        bot.send_message(message.chat.id, text="выберите кафе для заказа", reply_markup=markup)
- def func(message):
-        bot.register_next_step_handler(message, order1)
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton("Капучино")
-        btn2 = types.KeyboardButton("Американо")
-        btn3 = types.KeyboardButton("Латте")
-        btn4 = types.KeyboardButton("Мокко")
-        btn5 = types.KeyboardButton("Флэт уайт")
-        markup.add(btn1, btn2, btn3, btn4, btn5)
-        bot.send_message(message.chat.id, text="выберите напиток для заказа", reply_markup=markup)
- def func(message):
-         bot.register_next_step_handler(message, order2)
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn1 = types.KeyboardButton("0.3")
-        btn2 = types.KeyboardButton("0.4")
-        btn3 = types.KeyboardButton("0.5")
-        markup.add(btn1, btn2, btn3)
-        bot.send_message(message.chat.id, text="выберите объем напитка",  reply_markup=markup)
- bot.register_next_step_handler(message, order3)
- #prices
- PRICE = types.LabeledPrice(label="Ваш заказ:" + order2 + " " + order3  , amount= 500*100) #"запрос в бд тут" * 100)  # в копейках (руб)
- # buy
-@dp.message_handler(commands=['buy'])
-async def buy(message: types.Message):
-
-    await bot.send_invoice(message.chat.id,
-                           title="Ваш заказ",
-                           description=order2 + " " + order3,
-                           provider_token=config.PAYMENTS_TOKEN,
-                           currency="rub",
-                           payload="test-invoice-payload")
-   # pre checkout  (must be answered in 10 seconds)
-@dp.pre_checkout_query_handler(lambda query: True)
-async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
-    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup,\
+ KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import psycopg2
+from psycopg2 import Error
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 
-# successful payment
-@dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
-async def successful_payment(message: types.Message):
-    print("SUCCESSFUL PAYMENT:")
-    payment_info = message.successful_payment.to_python()
-    for k, v in payment_info.items():
-        print(f"{k} = {v}")
+# СѓСЃС‚Р°РЅРѕРІРєР° СѓСЂРѕРІРЅСЏ Р»РѕРіРёСЂРѕРІР°РЅРёСЏ
+logging.basicConfig(level=logging.INFO)
 
-    await bot.send_message(message.chat.id,
-                           f"Платеж на сумму прошел успешно!!!")
+# РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ Р±РѕС‚Р° Рё РґРёСЃРїРµС‚С‡РµСЂР°
+bot = Bot(token=config.TOKEN, parse_mode=types.ParseMode.HTML)
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
+admins = [450284324] 
+#895230164
+# СЂРµР°Р»РёР·Р°С†РёСЏ РєРѕРјР°РЅРґС‹ '/start'
+@dp.message_handler(commands=['start'])
+async def start(message):
+    if message.from_user.id in admins:
+        await message.delete()
+        await bot.send_message(message.chat.id, text="РџСЂРёРІРµС‚ admin", reply_markup=markup)
+    else:
+        await user_func(message)
+async def user_func(message):
+    await message.delete()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    await bot.send_message(message.chat.id, text="РџСЂРёРІРµС‚! РЈ РЅР°СЃ С‚С‹ РјРѕР¶РµС€СЊ РґРёСЃС‚Р°РЅС†РёРѕРЅРЅРѕ Р·Р°РєР°Р·Р°С‚СЊ РєРѕС„Рµ!", reply_markup=markup)
+    btn1 = types.KeyboardButton("Р“РѕСЂРѕС…РѕРІР°СЏ 35-37")
+    btn2 = types.KeyboardButton("РЎР°РґРѕРІР°СЏ 38")
+    btn3 = types.KeyboardButton("РЎР°РґРѕРІР°СЏ 44")
+    btn4 = types.KeyboardButton("РџРѕРїРѕРІР° 30")
+    btn5 = types.KeyboardButton("Р›РѕРјРѕРЅРѕСЃРѕРІР° 20")
+    markup.add(btn1, btn2, btn3, btn4, btn5)
+    await bot.send_message(message.chat.id, text="Р’С‹Р±РµСЂРё РєРѕС„РµР№РЅСЋ", reply_markup=markup)
+@dp.message_handler(content_types=['text'])
+def cafe(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    if message.text == "Р“РѕСЂРѕС…РѕРІР°СЏ 35-37":
+        cursor.execute("""SELECT * FROM "menu"; """)
+        record = cursor.fetchall()
+        btn = []
+        for i in record:
+            btn.append(types.KeyboardButton(i[0]))
+        for i in btn:
+            markup.add(i)
 
 
-# run long-polling
-if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=False)
-    #добавить кнопку поддержка
+# Р·Р°РїСѓСЃРє Р±РѕС‚Р°
+global cursor, connection
+        
+if __name__ == '__main__':
+    try:
+        connection = psycopg2.connect(user="postgres",
+                                      password="qwerty",
+                                      host="127.0.0.1",
+                                      port="5432",
+                                      database="lowcoffee_bot")
+        connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = connection.cursor()
+        executor.start_polling(dp, skip_updates=False)
+    except (Exception, Error) as error:
+        print("РћС€РёР±РєР° РЅР° СЃРµСЂРІРµСЂРµ, РїРѕРїСЂРѕР±СѓР№С‚Рµ Р·Р°РєР°Р·Р°С‚СЊ РїРѕР·Р¶Рµ", error)
+        
