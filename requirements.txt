@@ -1,5 +1,0 @@
-telebot
-PyTelegramBotAPI
-pyTelegramBotAPI
-pyTelegramBotAPI
-aiogram

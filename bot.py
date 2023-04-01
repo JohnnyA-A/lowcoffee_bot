@@ -1,4 +1,4 @@
-import config
+﻿import config
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -28,16 +28,6 @@ admins = []
 # реализация команды '/start'
 @dp.message_handler(commands=['start'])
 async def start(message):
-    if message.from_user.id in admins:
-        #await message.delete()
-        #тут нет markup
-        await bot.send_message(message.chat.id, text="Привет admin", reply_markup=markup)
-    else:
-        await user_func(message)
-
-
-
-async def user_func(message):
     #await message.delete()
     btn = [types.KeyboardButton("Гороховая 35-37"), types.KeyboardButton("Садовая 38"), types.KeyboardButton("Садовая 44"), types.KeyboardButton("Попова 30"), types.KeyboardButton("Ломоносова 20") ]
     await bot.send_message(message.chat.id, text="Привет! У нас ты можешь дистанционно заказать кофе!")
@@ -66,7 +56,7 @@ async def main(message):
         #await message.delete()
         tmp = 0
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Капучино 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Капучино 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Капучино 0.5 - {}.p".format(record[tmp][3]))]
+        btn = [types.KeyboardButton("Капучино 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Капучино 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Капучино 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
         await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
@@ -76,7 +66,7 @@ async def main(message):
         #await message.delete()
         tmp = 1
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}.p".format(record[tmp][3]))]
+        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
         await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
@@ -86,7 +76,7 @@ async def main(message):
         #await message.delete()
         tmp = 2
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}.p".format(record[tmp][3]))]
+        btn = [types.KeyboardButton("Мокко 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Мокко 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Мокко 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
         await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
@@ -96,15 +86,54 @@ async def main(message):
         #await message.delete()
         tmp = 3
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Флэт Уайт 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Флэт Уайт 0.4 - {}.p".format(record[tmp][2])), types.KeyboardButton("Флэт Уайт 0.5 - {}.p".format(record[tmp][3]))]
+        btn = [types.KeyboardButton("Флэт Уайт 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Флэт Уайт 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Флэт Уайт 0.5 - {}p.".format(record[tmp][3]))]
         for i in btn:
             markup.add(i)
         await bot.send_message(message.chat.id, text="Выберите размер", reply_markup=markup)
-    elif (message.text == "Капучино 0.3 - 120р."):
-        
+    elif (message.text == "Капучино 0.3 - 120р.") or (message.text == "Капучино 0.4 - 150p.") or (message.text == "Капучино 0.5 - 170p.") or (message.text == "Латте 0.3 - 120р.") or (message.text == "Латте 0.4 - 150p.") or (message.text == "Латте 0.5 - 170p.") or (message.text == "Мокко 0.3 - 145р.") or (message.text == "Мокко 0.4 - 175p.") or (message.text == "Мокко 0.5 - 195p.") or (message.text == "Флэт Уайт 0.3 - 140р.") or (message.text == "Флэт Уайт 0.4 - 170p.") or (message.text == "Флэт Уайт 0.5 - 190p.") :
+        price = message.text[::-1]
+        price = price[2:5]
+        price = int(price[::-1])
+        PRICE = types.LabeledPrice(label=message.text.split()[0] , amount=price*100)  # в копейках (руб)
+        cursor.execute("""SELECT * FROM "orders";""")
+        record = cursor.fetchall()
+        if record:
+            orderId = int(record[len(record) - 1][0]) + 1
+        else:
+            orderId = 1
+        comm = """INSERT INTO "orders" VALUES ('{}', '{}', {}, {});""".format(orderId, message.text.split()[0] , message.text.split()[1], price)
+        cursor.execute(comm)
+        connection.commit()
+
+
+        await bot.send_invoice(message.chat.id,
+                           title="Ваш заказ",
+                           description=message.text,
+                           provider_token=config.PAYMENTS_TOKEN,
+                           currency="rub",
+                           is_flexible=False,
+                           prices=[PRICE],
+                           start_parameter="one-month-subscription",
+                           payload="test-invoice-payload")
     else:
         await bot.send_message(message.chat.id, text="Такой команды ещё нет")
-    
+# pre checkout  (must be answered in 10 seconds)
+@dp.pre_checkout_query_handler(lambda query: True)
+async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+
+# successful payment
+@dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
+async def successful_payment(message: types.Message):
+    print("SUCCESSFUL PAYMENT:")
+    payment_info = message.successful_payment.to_python()
+    for k, v in payment_info.items():
+        print(f"{k} = {v}")
+
+    await bot.send_message(message.chat.id,
+                           f"Платеж на сумму {message.successful_payment.total_amount // 100} {message.successful_payment.currency} прошел успешно!!!")
+
 
 # запуск бота
 global cursor, connection, order
