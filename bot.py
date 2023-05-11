@@ -36,24 +36,25 @@ class Coffee(object):
 
 class Order(object):
     def __init__(self, menu_count):
-        self.pos_count = 0
         self.names = []
         self.volumes = []
-        self.counts = [0] * menu_count * 3
-        self.prices = [0] * menu_count * 3
+        self.counts = []
+        self.prices = []
     def add_position(self, coffeeName, coffeeVolume, coffeePrice):
-        self.pos_count += 1
+        if len(self.names) > 0:
+            for i in range(len(self.names)):
+                for k in range(len(self.volumes)):
+                    if (self.names[i] == coffeeName):
+                        if (self.volumes[k] == coffeeVolume):
+                            if i == k:
+                                self.counts[i] += 1
+                                self.prices[i] += coffeePrice
+                                return
         self.names.append(coffeeName)
         self.volumes.append(coffeeVolume)
+        self.counts.append(1)
+        self.prices.append(coffeePrice)
 
-        for i in range(len(self.names)):
-            for k in range(len(self.volumes)):
-                if (self.names[i] == coffeeName):
-                    if (self.volumes[k] == coffeeVolume):
-                        if i == k:
-                            self.counts[i] += 1
-                            self.prices[i] += coffeePrice
-                            return
 
 
 #------------------------------------------------------------------------------------------
@@ -97,10 +98,9 @@ async def main_menu(message):
         loc_connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         loc_cursor = loc_connection.cursor()
     except (Exception, Error) as error:
-        print("Ошибка на сервере, попробуйте заказать позже", error)
-        bot.send_message("Ошибка на сервере, попробуйте заказать позже")
+        print("Ошибка: ", error)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton("Выбрать заведение"))
+        markup.add(types.KeyboardButton("Главная"))
         await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже", reply_markup=markup)
 
     loc_cursor.execute("""SELECT * FROM "cafes";""")
@@ -112,8 +112,8 @@ async def main_menu(message):
     loc_connection.close ()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     buttons = [types.KeyboardButton(i.address) for i in cafes_arr]
-    for i in buttons:
-        markup.add(i)
+    markup.row(*buttons)
+    markup.add(types.KeyboardButton("История заказов"))
     await bot.send_message(message.chat.id, text="Выберите заведение:", reply_markup=markup)
 
 
@@ -133,15 +133,10 @@ async def choose_cafe(message):
         connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = connection.cursor()
     except (Exception, Error) as error:
-        print("Ошибка на сервере, попробуйте заказать позже", error)
-        await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже")
+        print("Ошибка: ", error)
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton("Выбрать заведение"))
+        markup.add(types.KeyboardButton("Главная"))
         await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже", reply_markup=markup)
-
-
-
-
 
     cursor.execute("""SELECT * FROM "menu";""")
     record = cursor.fetchall()
@@ -155,23 +150,66 @@ async def choose_cafe(message):
     order = Order(len(menu))
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("Выбрать заведение"))
+    markup.add(types.KeyboardButton("Главная"))
     await bot.send_message(message.chat.id, text=f"Вы выбрали кофейню по адресу: {curr_cafe.address}", reply_markup=markup)
     
+    global cart_count
+    cart_count = 0
     #показываем кофе из меню
-    buttons = [[types.InlineKeyboardButton(text=i.name, callback_data=i.name), types.InlineKeyboardButton(text=f"{i.smallVolume}/{i.smallPrice}р.", callback_data=i.name+"_small"), types.InlineKeyboardButton(text=f"{i.mediumVolume}/{i.mediumPrice}р.", callback_data=i.name+"_medium"), types.InlineKeyboardButton(text=f"{i.bigVolume}/{i.bigPrice}р.", callback_data=i.name+"_big")] for i in menu]
-    buttons.append([types.InlineKeyboardButton(text="🛒Корзина", callback_data="cart")])
+    
+
+    buttons = [[types.InlineKeyboardButton(text=i.name, callback_data=i.name), types.InlineKeyboardButton(text=f"{i.smallVolume}л./{i.smallPrice}р.", callback_data=i.name+"_small"), types.InlineKeyboardButton(text=f"{i.mediumVolume}л./{i.mediumPrice}р.", callback_data=i.name+"_medium"), types.InlineKeyboardButton(text=f"{i.bigVolume}л./{i.bigPrice}р.", callback_data=i.name+"_big")] for i in menu]
+    buttons.append([types.InlineKeyboardButton(text=f"🛒: {cart_count}", callback_data="cart")])
     markup = types.InlineKeyboardMarkup(inline_keyboard=buttons)
     await bot.send_message(message.chat.id, text="Выберите кофе:", reply_markup=markup)
 
 
+#История заказов
+async def orders_story(message):
+    for i in cafes_arr:
+        try:
+            story_connection = psycopg2.connect(user="postgres",
+                                          password="qwerty",
+                                          host=i.host,
+                                          port=i.port,
+                                          database="lowcoffee_menu")
+            story_connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            story_cursor = story_connection.cursor()
+            story_cursor.execute("""SELECT * FROM "orders";""")
+            record = story_cursor.fetchall()
+
+            tmp = f"Заказы по адресу {i.address}:\n"
+            for k in record:
+                if k[5] == 1:
+                    order_status = "Готовится"
+                elif k[5] == 2:
+                    order_status = "Готов"
+                else:
+                    order_status = "Выдан"
+                if (k[6] == userId):
+                    tmp_pos = ""
+                    for l in range(len(k[1])):
+                        tmp_pos += str(k[1][l]) + "|" + str(k[2][l]) + "|" + str(k[3][l]) + "|" + str(k[4][l]) + "\n"
+                    tmp += "Номер заказа:  " + str(k[0]) + "\n" + "Статус заказа: " + f"{order_status}" + "\n" + "Кофе|Объем|Количество|Цена \n" + tmp_pos + "\n"
+                tmp += "\n"           
+            await bot.send_message(message.chat.id, text=tmp)
+        except (Exception, Error) as error:
+            print("Ошибка: ", error)
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            markup.add(types.KeyboardButton("Главная"))
+            await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже", reply_markup=markup)
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Главная"))
+    await bot.send_message(message.chat.id, text = "Ждём ваших дальнейших заказов:)", reply_markup=markup)
 
 
+#Вывод корзины
 async def show_cart(call):
     await messages_del(call.message)
-    cart_text = f"Адресс: {curr_cafe.address}\nКофе:|Объем|Количество|Цена\n"
+    cart_text = f"Адресс: {curr_cafe.address}\nКофе|Объем|Количество|Цена\n"
     common_summ = 0
-    for i in range(order.pos_count):
+    for i in range(len(order.names)):
         cart_text += f"{order.names[i]}|{order.volumes[i]}|{order.counts[i]}|{order.prices[i]}\n"
         common_summ += order.prices[i]
     await bot.send_message(call.message.chat.id, text=cart_text)
@@ -182,7 +220,7 @@ async def show_cart(call):
 
 async def to_pay(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("Выбрать заведение"))
+    markup.add(types.KeyboardButton("Главная"))
     await bot.send_message(message.chat.id, text=f"При выходе корзина будет опустошена!", reply_markup=markup)
  
     PRICE = types.LabeledPrice(label=message.text.split()[0] , amount=int(sum(order.prices)*100))
@@ -208,7 +246,7 @@ async def welcome_def(message: types.Message):
     await messages_del(message)
     globs_del()
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Выбрать заведение")
+    markup.add("Главная")
     await bot.send_message(message.chat.id , text="Добро пожаловать!")
     await bot.send_message(message.chat.id, text="Сеть кофеен\nLowcoffee", reply_markup=markup)
 
@@ -216,9 +254,11 @@ async def welcome_def(message: types.Message):
 async def main_func(message):
     try:
         # Главное меню и выбор заведения
-        if (message.text == "Выбрать заведение"):
+        if (message.text == "Главная"):
             globs_del()
             await messages_del(message)
+            global userId
+            userId = message.from_user.id 
             await main_menu(message)
 
         # Выбор заведения и его меню
@@ -226,6 +266,10 @@ async def main_func(message):
             await messages_del(message)
             await choose_cafe(message)
 
+        #История заказов
+        elif (message.text == "История заказов"):
+            await messages_del(message)
+            await orders_story(message)
         elif (message.text == "Оплатить заказ"):
             await messages_del(message)
             await to_pay(message)
@@ -234,12 +278,12 @@ async def main_func(message):
             await messages_del(message)
             globs_del()
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-            markup.add(types.KeyboardButton("Выбрать заведение"))
+            markup.add(types.KeyboardButton("Главная"))
             await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
     except NameError:
         await bot.send_message(message.chat.id, text = "Что-то пошло не так, давайте попробуем ещё раз")
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add(types.KeyboardButton("Выбрать заведение"))
+        markup.add(types.KeyboardButton("Главная"))
         await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
 
 # pre checkout  (must be answered in 10 seconds)
@@ -273,8 +317,7 @@ async def successful_payment(message: types.Message):
     order_volumes = ""
     order_counts = ""
     order_prices = ""
-
-    for i in range(order.pos_count):
+    for i in range(len(order.names)):
         order_names += '"' + order.names[i] + '"' +  " ,"
         order_volumes += str(order.volumes[i]) + ","
         order_counts += str(order.counts[i]) + ","
@@ -284,32 +327,54 @@ async def successful_payment(message: types.Message):
     order_volumes = order_volumes[:-1]
     order_counts = order_counts[:-1]
     order_prices = order_prices[:-1]
-    order_str = f"""INSERT INTO "orders" VALUES ({orderId},""" + "'{" f"{order_names}" "}', '{" f"{order_volumes}" "}', '{" f"{order_counts}" "}', '{" f"{order_prices}" "}')"
+    order_str = f"""INSERT INTO "orders" VALUES ({orderId},""" + "'{" f"{order_names}" "}', '{" f"{order_volumes}" "}', '{" f"{order_counts}" "}', '{" f"{order_prices}" "}', " f"{1}, {userId})"
 
     cursor.execute(order_str)
     connection.commit()
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("Выбрать заведение")
+    markup.add(types.KeyboardButton("Главная"))
 
     globs_del()
-    await bot.send_message(message.chat.id, text="Ваш номер заказа - {}".format(orderId))   
-    await bot.send_message(message.chat.id, text="Не забудьте его", reply_markup=markup)
+    await bot.send_message(message.chat.id, text="Ваш номер заказа - {}".format(orderId), reply_markup = markup)   
+
+    buttons = [[types.InlineKeyboardButton(text="Проверить статус заказа", callback_data=f"orderStatusCheck_{orderId}")]]
+    markup = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    await bot.send_message(message.chat.id, text="Статус заказа: Готовится", reply_markup=markup)
+
+
 
 @dp.callback_query_handler(lambda c: c.data == 'cart') 
 async def cart(call: CallbackQuery):
-    if order.pos_count == 0:
+    if len(order.names) == 0:
         await call.answer(text="Корзина пока пустая", show_alert=True)
     else:
         await show_cart(call)
 
+
+#обработка названий позиций из меню
 @dp.callback_query_handler(lambda c: c.data in [i.name for i in menu]) 
 async def coffee_name_press(call: CallbackQuery):
     pass
+
+#обработка нужный объемов напитков, добавление в корзину
 @dp.callback_query_handler(lambda c: c.data in [i.name+k for k in ["_small", "_medium", "_big"] for i in menu]) 
 async def coffee_name_press(call: CallbackQuery):
-    tmp = call.data.find("_")
+
+    await messages_del(call.message)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Главная"))
+    await bot.send_message(call.message.chat.id, text=f"Вы выбрали кофейню по адресу: {curr_cafe.address}", reply_markup=markup)
     
+    global cart_count
+    cart_count += 1
+    buttons = [[types.InlineKeyboardButton(text=i.name, callback_data=i.name), types.InlineKeyboardButton(text=f"{i.smallVolume}л./{i.smallPrice}р.", callback_data=i.name+"_small"), types.InlineKeyboardButton(text=f"{i.mediumVolume}л./{i.mediumPrice}р.", callback_data=i.name+"_medium"), types.InlineKeyboardButton(text=f"{i.bigVolume}л./{i.bigPrice}р.", callback_data=i.name+"_big")] for i in menu]
+    buttons.append([types.InlineKeyboardButton(text=f"🛒: {cart_count}", callback_data="cart")])
+    markup = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    await bot.send_message(call.message.chat.id, text="Выберите кофе:", reply_markup=markup)
+
+
+    tmp = call.data.find("_")
     for i in range(len(menu)):
         if menu[i].name == call.data[:tmp]:
             tmp_pos = i
@@ -323,7 +388,32 @@ async def coffee_name_press(call: CallbackQuery):
     elif call.data[tmp+1:] == "big":
         tmp_vol = 0.5
         tmp_price =  menu[i].bigPrice
+
     order.add_position(call.data[:tmp], tmp_vol, tmp_price)
+
+
+#Проверка статуса заказа
+@dp.callback_query_handler(lambda c: "orderStatusCheck_" in c.data)
+async def order_status_check(call: CallbackQuery): 
+    orderId = int(call.data[call.data.find("_")+1:])
+    cursor.execute(f"""SELECT * FROM "orders" WHERE ("orderId"={orderId})""")
+    record = cursor.fetchall()
+    if record[0][5] == 1:
+        order_status = "Готовится"
+    elif record[0][5] == 2:
+        order_status = "Готов"
+    else:
+        order_status = "Выдан"
+
+    globs_del()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Главная"))
+    await bot.send_message(call.message.chat.id, text="Ваш номер заказа - {}".format(orderId), reply_markup = markup)   
+    await messages_del(call.message)
+    buttons = [[types.InlineKeyboardButton(text="Проверить статус заказа", callback_data=f"orderStatusCheck_{orderId}")]]
+    markup = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    await bot.send_message(call.message.chat.id, text=f"Статус заказа: {order_status}", reply_markup=markup)
+
 
 #------------------------------------------------------------------------------------------
 
