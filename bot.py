@@ -1,121 +1,192 @@
 ﻿import config
+import logging
+from aiogram import *
 import psycopg2
 from psycopg2 import Error
-from time import time, ctime
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentType
-from aiogram.types import ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import CallbackQuery
+from time import time, ctime
+
+#for logging
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=config.TOKEN)
+dp = Dispatcher(bot)
+
+#-------------------------------------------------Classes----------------------------------
+class Cafe(object):
+    def __init__(self, cafe_id, address, host, port):
+        self.id = cafe_id
+        self.address = address
+        self.host = host
+        self.port = port
 
 
-bot = Bot(token=config.TOKEN, parse_mode=types.ParseMode.HTML)
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
+class Coffee(object):
+    def __init__(self, coffeeName, smallVolume, smallPrice, mediumVolume, mediumPrice, bigVolume, bigPrice):
+        self.name = coffeeName
+        self.smallVolume = smallVolume
+        self.smallPrice = smallPrice
+        self.mediumVolume = mediumVolume
+        self.mediumPrice = mediumPrice
+        self.bigVolume = bigVolume
+        self.bigPrice = bigPrice
 
-@dp.message_handler(commands=['start'])
-async def start(message):
-    i = 1
+class Order(object):
+    def __init__(self, menu_count):
+        self.pos_count = 0
+        self.names = []
+        self.volumes = []
+        self.counts = [0] * menu_count * 3
+        self.prices = [0] * menu_count * 3
+    def add_position(self, coffeeName, coffeeVolume, coffeePrice):
+        self.pos_count += 1
+        self.names.append(coffeeName)
+        self.volumes.append(coffeeVolume)
+
+        for i in range(len(self.names)):
+            for k in range(len(self.volumes)):
+                if (self.names[i] == coffeeName):
+                    if (self.volumes[k] == coffeeVolume):
+                        if i == k:
+                            self.counts[i] += 1
+                            self.prices[i] += coffeePrice
+                            return
+
+
+#------------------------------------------------------------------------------------------
+
+
+
+#-----------------------------------------------Functions----------------------------------
+
+#для очистки сообщений
+async def messages_del(message):
+    i = 0
     while 1:
         try:
             await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - i)
             i+=1
         except:
             break
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add("На главную")
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.send_message(message.chat.id, text="Сеть кофеен")   
-        await bot.send_message(message.chat.id, text="Lowcoffee", reply_markup=markup)
 
-@dp.message_handler(content_types=['text'])
-async def main(message):
-    if (message.text == "Гороховая 35-37") or (message.text == "Садовая 38") or (message.text == "Садовая 44") or (message.text == "Попова 30") or (message.text == "Ломоносова 20"):         
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 2)
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
-        btn = []
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        for i in record:
-            btn.append(types.KeyboardButton("{} - {}р./{}р./{}р.".format(i[0], i[1], i[2], i[3])))
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите кофе", reply_markup=markup)
-    elif (message.text == "Капучино - 120р./150р./170р."):
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
 
-        tmp = 0
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Капучино 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Капучино 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Капучино 0.5 - {}p.".format(record[tmp][3]))]
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
-    elif (message.text == "Латте - 120р./150р./170р."):
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
+#для удаления глобальных переменных
+def globs_del():
+    try:
+        del order
+        del cafes_arr
+        del curr_cafe
+        del connection
+        del cursor
+    except:
+        pass
 
-        tmp = 1
+#главное меню, меню выбора заведения
+async def main_menu(message):
+    await messages_del(message)
+    #подключение к локальной бд
+    try:
+        loc_connection = psycopg2.connect(user="postgres",
+                                      password="qwerty",
+                                      host="127.0.0.1",
+                                      port="5432",
+                                      database="lowcoffee_cafes")
+        loc_connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        loc_cursor = loc_connection.cursor()
+    except (Exception, Error) as error:
+        print("Ошибка на сервере, попробуйте заказать позже", error)
+        bot.send_message("Ошибка на сервере, попробуйте заказать позже")
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Латте 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Латте 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Латте 0.5 - {}p.".format(record[tmp][3]))]
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
-    elif (message.text == "Мокко - 145р./175р./195р."):
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
+        markup.add(types.KeyboardButton("Выбрать заведение"))
+        await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже", reply_markup=markup)
 
-        tmp = 2
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Мокко 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Мокко 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Мокко 0.5 - {}p.".format(record[tmp][3]))]
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
-    elif (message.text == "Флэт Уайт - 140р./170р./190р."):
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        cursor.execute("""SELECT * FROM "menu"; """)
-        record = cursor.fetchall()
+    loc_cursor.execute("""SELECT * FROM "cafes";""")
+    record = loc_cursor.fetchall()
+    global cafes_arr
+    cafes_arr = []
+    for i in record:
+        cafes_arr.append(Cafe(i[0], i[1], i[2], i[3]))
+    loc_connection.close ()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    buttons = [types.KeyboardButton(i.address) for i in cafes_arr]
+    for i in buttons:
+        markup.add(i)
+    await bot.send_message(message.chat.id, text="Выберите заведение:", reply_markup=markup)
 
-        tmp = 3
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = [types.KeyboardButton("Флэт Уайт 0.3 - {}р.".format(record[tmp][1])), types.KeyboardButton("Флэт Уайт 0.4 - {}p.".format(record[tmp][2])), types.KeyboardButton("Флэт Уайт 0.5 - {}p.".format(record[tmp][3]))]
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите объём", reply_markup=markup)
-    elif (message.text == "Капучино 0.3 - 120р.") or (message.text == "Капучино 0.4 - 150p.") or (message.text == "Капучино 0.5 - 170p.") or (message.text == "Латте 0.3 - 120р.") or (message.text == "Латте 0.4 - 150p.") or (message.text == "Латте 0.5 - 170p.") or (message.text == "Мокко 0.3 - 145р.") or (message.text == "Мокко 0.4 - 175p.") or (message.text == "Мокко 0.5 - 195p.") or (message.text == "Флэт Уайт 0.3 - 140р.") or (message.text == "Флэт Уайт 0.4 - 170p.") or (message.text == "Флэт Уайт 0.5 - 190p.") :
-        price = message.text[::-1]
-        price = price[2:5]
-        price = int(price[::-1])
-        PRICE = types.LabeledPrice(label=message.text.split()[0] , amount=price*100)  # в копейках (руб)
-        cursor.execute("""SELECT * FROM "orders";""")
-        record = cursor.fetchall()
-        global orderId, comm
-        if record:
-            orderId = int(record[len(record) - 1][0]) + 1
-        else:
-            orderId = 1
-        name_cof = message.text.split()[0]
-        val_cof = message.text.split()[1]
-        if name_cof == "Флэт":
-            name_cof+= " Уайт"
-            val_cof = message.text.split()[2]
 
-        comm = """INSERT INTO "orders" VALUES ('{}', '{}', {}, {}, {});""".format(orderId, name_cof , val_cof, price, 0)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
+#выбор заведения, меню выбора кофе
+async def choose_cafe(message):
+    for i in cafes_arr:
+        if message.text == i.address:
+            global curr_cafe
+            curr_cafe = i
+    global connection, cursor
+    try:
+        connection = psycopg2.connect(user="postgres",
+                                      password="qwerty",
+                                      host=curr_cafe.host,
+                                      port=curr_cafe.port,
+                                      database="lowcoffee_menu")
+        connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = connection.cursor()
+    except (Exception, Error) as error:
+        print("Ошибка на сервере, попробуйте заказать позже", error)
+        await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже")
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        markup.add("На главную")
-        await bot.send_message(message.chat.id, text="Оплатите заказ", reply_markup=markup)
-        await bot.send_invoice(message.chat.id,
+        markup.add(types.KeyboardButton("Выбрать заведение"))
+        await bot.send_message(message.chat.id, text = "Ошибка на сервере, попробуйте заказать позже", reply_markup=markup)
+
+
+
+
+
+    cursor.execute("""SELECT * FROM "menu";""")
+    record = cursor.fetchall()
+    global menu
+    menu = []
+    for i in record:
+        menu.append(Coffee(i[0], i[1], i[2], i[3], i[4], i[5], i[6]))
+
+    #объявляем корзину
+    global order
+    order = Order(len(menu))
+
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Выбрать заведение"))
+    await bot.send_message(message.chat.id, text=f"Вы выбрали кофейню по адресу: {curr_cafe.address}", reply_markup=markup)
+    
+    #показываем кофе из меню
+    buttons = [[types.InlineKeyboardButton(text=i.name, callback_data=i.name), types.InlineKeyboardButton(text=f"{i.smallVolume}/{i.smallPrice}р.", callback_data=i.name+"_small"), types.InlineKeyboardButton(text=f"{i.mediumVolume}/{i.mediumPrice}р.", callback_data=i.name+"_medium"), types.InlineKeyboardButton(text=f"{i.bigVolume}/{i.bigPrice}р.", callback_data=i.name+"_big")] for i in menu]
+    buttons.append([types.InlineKeyboardButton(text="🛒Корзина", callback_data="cart")])
+    markup = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    await bot.send_message(message.chat.id, text="Выберите кофе:", reply_markup=markup)
+
+
+
+
+async def show_cart(call):
+    await messages_del(call.message)
+    cart_text = f"Адресс: {curr_cafe.address}\nКофе:|Объем|Количество|Цена\n"
+    common_summ = 0
+    for i in range(order.pos_count):
+        cart_text += f"{order.names[i]}|{order.volumes[i]}|{order.counts[i]}|{order.prices[i]}\n"
+        common_summ += order.prices[i]
+    await bot.send_message(call.message.chat.id, text=cart_text)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Оплатить заказ"), types.KeyboardButton("Назад"))
+    await bot.send_message(call.message.chat.id, text=f"Итого:   {common_summ}р.", reply_markup=markup)
+
+
+async def to_pay(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("Выбрать заведение"))
+    await bot.send_message(message.chat.id, text=f"При выходе корзина будет опустошена!", reply_markup=markup)
+ 
+    PRICE = types.LabeledPrice(label=message.text.split()[0] , amount=int(sum(order.prices)*100))
+    await bot.send_invoice(message.chat.id,
                            title="Ваш заказ",
                            description=message.text,
                            provider_token=config.PAYMENTS_TOKEN,
@@ -124,25 +195,52 @@ async def main(message):
                            prices=[PRICE],
                            start_parameter="one-month-subscription",
                            payload="test-invoice-payload")
-    else:
-        try :
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        except:
-            pass
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-        except:
-            pass
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 2)
-        except:
-            pass
-        btn = [types.KeyboardButton("Гороховая 35-37"), types.KeyboardButton("Садовая 38"), types.KeyboardButton("Садовая 44"), types.KeyboardButton("Попова 30"), types.KeyboardButton("Ломоносова 20") ]
-        await bot.send_message(message.chat.id, text="Привет! У нас Вы можете дистанционно заказать кофе!")
+
+#------------------------------------------------------------------------------------------
+
+
+
+
+#----------------------------------------Bot body------------------------------------------
+
+@dp.message_handler(commands=["start", "help"])
+async def welcome_def(message: types.Message):
+    await messages_del(message)
+    globs_del()
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Выбрать заведение")
+    await bot.send_message(message.chat.id , text="Добро пожаловать!")
+    await bot.send_message(message.chat.id, text="Сеть кофеен\nLowcoffee", reply_markup=markup)
+
+@dp.message_handler(content_types=['text'])
+async def main_func(message):
+    try:
+        # Главное меню и выбор заведения
+        if (message.text == "Выбрать заведение"):
+            globs_del()
+            await messages_del(message)
+            await main_menu(message)
+
+        # Выбор заведения и его меню
+        elif (message.text in [i.address for i in cafes_arr]) or (message.text == "Назад"):
+            await messages_del(message)
+            await choose_cafe(message)
+
+        elif (message.text == "Оплатить заказ"):
+            await messages_del(message)
+            await to_pay(message)
+        #Обработка всех непрописанных команд
+        else:
+            await messages_del(message)
+            globs_del()
+            markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            markup.add(types.KeyboardButton("Выбрать заведение"))
+            await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
+    except NameError:
+        await bot.send_message(message.chat.id, text = "Что-то пошло не так, давайте попробуем ещё раз")
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        for i in btn:
-            markup.add(i)
-        await bot.send_message(message.chat.id, text="Выберите кофейню", reply_markup=markup)
+        markup.add(types.KeyboardButton("Выбрать заведение"))
+        await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
 
 # pre checkout  (must be answered in 10 seconds)
 @dp.pre_checkout_query_handler(lambda query: True)
@@ -153,9 +251,6 @@ async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
 # successful payment
 @dp.message_handler(content_types=ContentType.SUCCESSFUL_PAYMENT)
 async def successful_payment(message: types.Message):
-    global comm,orderId
-    cursor.execute(comm)
-    connection.commit()
     local_time = ctime(time())
     data = ""
     payment_info = message.successful_payment.to_python()
@@ -163,27 +258,76 @@ async def successful_payment(message: types.Message):
         data += (f"{k} = {v}")
     cursor.execute("""INSERT INTO "payments" VALUES ('{}', '{}') """.format(local_time, data))
     connection.commit()
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 1)
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id - 2)
+
+    #ищем номер заказа
+    cursor.execute("""SELECT * FROM "orders";""")
+    record = cursor.fetchall()
+    if record:
+        orderId = int(record[len(record) - 1][0]) + 1
+    else:
+        orderId = 1
+
+    await messages_del(message)
+
+    order_names = ""
+    order_volumes = ""
+    order_counts = ""
+    order_prices = ""
+
+    for i in range(order.pos_count):
+        order_names += '"' + order.names[i] + '"' +  " ,"
+        order_volumes += str(order.volumes[i]) + ","
+        order_counts += str(order.counts[i]) + ","
+        order_prices += str(order.prices[i]) + ","
+
+    order_names = order_names[:-1]
+    order_volumes = order_volumes[:-1]
+    order_counts = order_counts[:-1]
+    order_prices = order_prices[:-1]
+    order_str = f"""INSERT INTO "orders" VALUES ({orderId},""" + "'{" f"{order_names}" "}', '{" f"{order_volumes}" "}', '{" f"{order_counts}" "}', '{" f"{order_prices}" "}')"
+
+    cursor.execute(order_str)
+    connection.commit()
+
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("На главную")
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    markup.add("Выбрать заведение")
+
+    globs_del()
     await bot.send_message(message.chat.id, text="Ваш номер заказа - {}".format(orderId))   
     await bot.send_message(message.chat.id, text="Не забудьте его", reply_markup=markup)
 
-# запуск бота
-global cursor, connection, comm
+@dp.callback_query_handler(lambda c: c.data == 'cart') 
+async def cart(call: CallbackQuery):
+    if order.pos_count == 0:
+        await call.answer(text="Корзина пока пустая", show_alert=True)
+    else:
+        await show_cart(call)
 
-if __name__ == '__main__':
-    try:
-        connection = psycopg2.connect(user="postgres",
-                                      password="qwerty",
-                                      host="127.0.0.1",
-                                      port="5432",
-                                      database="lowcoffee_bot")
-        connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = connection.cursor()
-        executor.start_polling(dp, skip_updates=False)
-    except (Exception, Error) as error:
-        print("Ошибка на сервере, попробуйте заказать позже", error)
-        
+@dp.callback_query_handler(lambda c: c.data in [i.name for i in menu]) 
+async def coffee_name_press(call: CallbackQuery):
+    pass
+@dp.callback_query_handler(lambda c: c.data in [i.name+k for k in ["_small", "_medium", "_big"] for i in menu]) 
+async def coffee_name_press(call: CallbackQuery):
+    tmp = call.data.find("_")
+    
+    for i in range(len(menu)):
+        if menu[i].name == call.data[:tmp]:
+            tmp_pos = i
+            break
+    if call.data[tmp+1:] == "small":
+        tmp_vol = 0.3
+        tmp_price =  menu[i].smallPrice
+    elif call.data[tmp+1:] == "medium":
+        tmp_vol = 0.4
+        tmp_price =  menu[i].mediumPrice
+    elif call.data[tmp+1:] == "big":
+        tmp_vol = 0.5
+        tmp_price =  menu[i].bigPrice
+    order.add_position(call.data[:tmp], tmp_vol, tmp_price)
+
+#------------------------------------------------------------------------------------------
+
+
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=False)
