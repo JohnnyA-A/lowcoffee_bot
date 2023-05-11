@@ -281,10 +281,9 @@ async def main_func(message):
             markup.add(types.KeyboardButton("Главная"))
             await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
     except NameError:
-        await bot.send_message(message.chat.id, text = "Что-то пошло не так, давайте попробуем ещё раз")
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add(types.KeyboardButton("Главная"))
-        await bot.send_message(message.chat.id, text = "Такой команды нет :(", reply_markup=markup)
+        await bot.send_message(message.chat.id, text = "Что-то пошло не так, давайте попробуем ещё раз", reply_markup=markup)
 
 # pre checkout  (must be answered in 10 seconds)
 @dp.pre_checkout_query_handler(lambda query: True)
